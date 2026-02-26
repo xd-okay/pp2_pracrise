@@ -1,13 +1,20 @@
 import math
 import random
+#1
+#a=int(input())
+#print(math.radians(a))
+#2
+# a=int(input())
+# b=int(input())
+# c=int(input())
+# print((a+b)/2*c)
 
-print(math.sin(math.pi/2))
-print(math.cos(math.pi/2))
-print(math.sqrt(16))
-print(math.ceil(4.2)) #округление
+# 3
+# a=int(input())
+# b=int(input())
+# print((a*b*b)/4*math.tan(180/a))
 
-
-items = [1, 2, 3, 4, 5]
-print(random.choice(items)) 
-a=random.randint(0,100)
-print(a)
+#4
+# a=int(input())
+# h=int(input())
+# print(a*h)
