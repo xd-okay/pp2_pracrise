@@ -23,5 +23,3 @@ camry.set_mark("Toyota")
 camry.set_year(b)
 
 print(camry.get_mark(), camry.get_year())
-
-

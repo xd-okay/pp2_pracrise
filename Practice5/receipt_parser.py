@@ -14,8 +14,8 @@ for i in range(0, len(txt)):
         # print(price.group(0))
         cost=txt[i+5].strip()
         cost=cost.replace(",",".")
-        cost=cost.replace(" ", "")
         total_cost+=float(cost)
+        cost=cost.replace(" ", "")
         # print(cost)
         print("%-100s %-10s %8s" % (name, price.group(0), cost))
         

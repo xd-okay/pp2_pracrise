@@ -5,7 +5,6 @@ file_path = os.path.join(script_dir, "structure.txt")
 
 with open(file_path, "r", encoding="utf-8") as file:
     content = [line.rstrip("\n") for line in file]
-
 # чистим псевдографику дерева
 content = [item.replace('├── ', '')
                  .replace('│   ', '')
