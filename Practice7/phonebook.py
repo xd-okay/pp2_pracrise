@@ -8,6 +8,7 @@ db_pass="Aldiyar"
 conn = psycopg2.connect(f"dbname={db_db} user={db_user} password={db_pass}")
 
 cur = conn.cursor()
+cur.execute("DROP TABLE phonebook1")
 cur.execute("CREATE TABLE phonebook1 (id serial PRIMARY KEY, name VARCHAR, number_ph VARCHAR)")
 
 id=0
