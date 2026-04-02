@@ -45,3 +45,11 @@ BEGIN
 END;
 
 $$;
+
+
+//deleting
+CREATE OR REPLACE PROCEDURE deleting(p text) LANGUAGE plpgsql as $$
+BEGIN
+	DELETE FROM phonebook1 WHERE name = p OR number_ph = p;
+END;
+$$;

@@ -6,3 +6,18 @@ BEGIN
                     OR aldiyar.number_ph ILIKE '%' || p || '%';
 END;
 $$ LANGUAGE plpgsql;
+
+
+
+
+//pagination
+CREATE OR REPLACE FUNCTION pagination(limits int, offsets int)
+RETURNS TABLE(id integer, name character varying, number_ph character varying) 
+LANGUAGE plpgsql AS $$
+BEGIN
+	RETURN QUERY SELECT * FROM phonebook1
+	ORDER BY ID ASC
+	LIMIT limits
+	OFFSET offsets;
+END;
+$$;
