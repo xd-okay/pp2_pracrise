@@ -7,7 +7,7 @@ pygame.display.set_caption("plz 1 point")
 x,y=100,100
 running = True
 
-square= square = pygame.Surface((1000,1000))
+square = pygame.Surface((1000,1000))
 square.fill((255,255,255))
 
 while running:
