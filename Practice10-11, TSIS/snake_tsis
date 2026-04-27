@@ -1,0 +1,261 @@
+import pygame
+import random
+import json
+import psycopg2
+from datetime import datetime
+
+# --- Инициализация Pygame ---
+pygame.init()
+WIDTH, HEIGHT = 600, 400
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+font_small = pygame.font.SysFont("Arial", 20)
+font_big = pygame.font.SysFont("Arial", 40)
+
+# --- Настройки и БД ---
+SETTINGS_FILE = "settings.json"
+
+def load_settings():
+    try:
+        with open(SETTINGS_FILE, "r") as f: return json.load(f)
+    except:
+        return {"snake_color": [50, 200, 50], "grid": True, "sound": True}
+
+def save_settings(data):
+    with open(SETTINGS_FILE, "w") as f: json.dump(data, f)
+
+settings = load_settings()
+
+def get_db_connection():
+    return psycopg2.connect(database="snake_db", user="postgres", password="Aldiyar", host="127.0.0.1")
+
+# --- ФУНКЦИИ ЛИДЕРБОРДА ---
+def get_leaderboard_data():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT p.username, s.score, s.level_reached
+            FROM game_sessions s 
+            JOIN players p ON s.player_id = p.id 
+            ORDER BY s.score DESC 
+            LIMIT 10;
+        """)
+        data = cur.fetchall()
+        cur.close()
+        conn.close()
+        return data
+    except Exception as e:
+        print("Ошибка загрузки лидеров:", e)
+        return []
+
+def draw_leaderboard_screen(screen, font_big, font_small, data):
+    screen.fill((20, 20, 20))
+    title = font_big.render("TOP 10 LEADERBOARD", True, (255, 215, 0))
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 30))
+    
+    header = font_small.render(f"{'Rank':<5} {'Player':<15} {'Score':<10} {'Lvl':<5}", True, (200, 200, 200))
+    screen.blit(header, (100, 90))
+    pygame.draw.line(screen, (100, 100, 100), (100, 115), (500, 115), 2)
+
+    for i, (name, score, lvl) in enumerate(data):
+        color = (255, 255, 255)
+        if i == 0: color = (255, 215, 0)
+        elif i == 1: color = (192, 192, 192)
+        elif i == 2: color = (205, 127, 50)
+        
+        entry_text = f"#{i+1:<4} {name[:12]:<15} {score:<10} {lvl:<5}"
+        img = font_small.render(entry_text, True, color)
+        screen.blit(img, (100, 130 + i * 25))
+
+    hint = font_small.render("Press M to return to Menu", True, (100, 100, 100))
+    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, 360))
+
+# --- Классы игры ---
+class Game:
+    def __init__(self):
+        self.username = ""
+        self.state = "MENU"
+        self.personal_best = 0
+        self.obstacles = []  
+        self.reset()
+
+    def reset(self):
+        self.snake = [[100, 100], [90, 100], [80, 100]]
+        self.dir = "r"
+        self.score = 0
+        self.level = 1
+        self.obstacles = [] 
+        self.generate_obstacles() 
+        self.food = self.spawn_item("food")
+        self.poison = self.spawn_item("poison")
+        self.powerup = None
+        self.powerup_timer = 0
+        self.active_effect = None
+        self.effect_end_time = 0
+        self.shield_active = False
+
+    def spawn_item(self, type):
+        while True:
+            x = random.randint(0, (WIDTH-10)//10) * 10
+            y = random.randint(0, (HEIGHT-10)//10) * 10
+            if [x, y] not in self.snake and not any(o.collidepoint(x, y) for o in self.obstacles):
+                if type == "food":
+                    r = random.random()
+                    weight = 1 if r < 0.7 else (2 if r < 0.9 else 3)
+                    color = (200, 120, 0) if weight == 1 else (255, 255, 0) if weight == 2 else (255, 0, 0)
+                    return {"pos": [x, y], "weight": weight, "color": color, "timer": 100}
+                elif type == "poison":
+                    return [x, y]
+                elif type == "powerup":
+                    p_type = random.choice(["speed", "slow", "shield"])
+                    return {"pos": [x, y], "type": p_type, "timer": 400}
+        
+    def generate_obstacles(self):
+        self.obstacles = []
+        if self.level >= 3:
+            for _ in range(self.level * 2):
+                x = random.randint(0, (WIDTH-10)//10) * 10
+                y = random.randint(0, (HEIGHT-10)//10) * 10
+                if abs(x - self.snake[0][0]) > 50:
+                    self.obstacles.append(pygame.Rect(x, y, 10, 10))
+
+    def save_result(self):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("INSERT INTO players (username) VALUES (%s) ON CONFLICT (username) DO NOTHING", (self.username,))
+            cur.execute("SELECT id FROM players WHERE username = %s", (self.username,))
+            p_id = cur.fetchone()[0]
+            cur.execute("INSERT INTO game_sessions (player_id, score, level_reached) VALUES (%s, %s, %s)", 
+                        (p_id, self.score, self.level))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e: 
+            print("DB Error:", e)
+
+    def draw_grid(self):
+        if settings["grid"]:
+            for x in range(0, WIDTH, 10): pygame.draw.line(screen, (230, 230, 230), (x, 0), (x, HEIGHT))
+            for y in range(0, HEIGHT, 10): pygame.draw.line(screen, (230, 230, 230), (0, y), (WIDTH, y))
+
+# --- Основной цикл и UI ---
+game = Game()
+running = True
+leaders_list = []
+
+while running:
+    screen.fill((255, 255, 255))
+    events = pygame.event.get()
+    for event in events:
+        if event.type == pygame.QUIT: running = False
+        
+        if game.state == "MENU":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_BACKSPACE: game.username = game.username[:-1]
+                elif event.key == pygame.K_RETURN and game.username: game.state = "GAME"; game.reset()
+                elif event.key == pygame.K_l: # Переход к лидерам
+                    leaders_list = get_leaderboard_data()
+                    game.state = "LEADERBOARD"
+                else: game.username += event.unicode
+
+        elif game.state == "LEADERBOARD":
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_m:
+                game.state = "MENU"
+
+        elif game.state == "GAMEOVER":
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r: game.reset(); game.state = "GAME"
+                if event.key == pygame.K_l:
+                    leaders_list = get_leaderboard_data()
+                    game.state = "LEADERBOARD"
+
+    # --- Отрисовка состояний ---
+    if game.state == "MENU":
+        txt = font_big.render(f"Enter Name: {game.username}", True, (0, 0, 0))
+        screen.blit(txt, (100, 150))
+        hint = font_small.render("ENTER to Start | L for Leaderboard", True, (100, 100, 100))
+        screen.blit(hint, (100, 200))
+
+    elif game.state == "LEADERBOARD":
+        draw_leaderboard_screen(screen, font_big, font_small, leaders_list)
+
+    elif game.state == "GAME":
+        keys = pygame.key.get_pressed()
+        if (keys[pygame.K_UP] or keys[pygame.K_w]) and game.dir != "d": game.dir = "u"
+        if (keys[pygame.K_DOWN] or keys[pygame.K_s]) and game.dir != "u": game.dir = "d"
+        if (keys[pygame.K_LEFT] or keys[pygame.K_a]) and game.dir != "r": game.dir = "l"
+        if (keys[pygame.K_RIGHT] or keys[pygame.K_d]) and game.dir != "l": game.dir = "r"
+
+        head = list(game.snake[0])
+        if game.dir == "u": head[1] -= 10
+        if game.dir == "d": head[1] += 10
+        if game.dir == "l": head[0] -= 10
+        if game.dir == "r": head[0] += 10
+        game.snake.insert(0, head)
+
+        collision = False
+        if head[0] < 0 or head[0] >= WIDTH or head[1] < 0 or head[1] >= HEIGHT: collision = True
+        if any(o.collidepoint(head[0], head[1]) for o in game.obstacles): collision = True
+        if head in game.snake[1:]: collision = True
+
+        if collision:
+            if game.shield_active:
+                game.shield_active = False
+            else:
+                game.save_result()
+                game.state = "GAMEOVER"
+
+        if not collision:
+            if head == game.food["pos"]:
+                game.score += game.food["weight"]
+                new_lvl = (game.score // 10) + 1
+                if new_lvl > game.level:
+                    game.level = new_lvl
+                    game.generate_obstacles()
+                game.food = game.spawn_item("food")
+            else:
+                game.snake.pop()
+
+            if head == game.poison:
+                for _ in range(2): 
+                    if len(game.snake) > 1: game.snake.pop()
+                    else: game.state = "GAMEOVER"; game.save_result()
+                game.poison = game.spawn_item("poison")
+
+            if game.powerup and head == game.powerup["pos"]:
+                game.active_effect = game.powerup["type"]
+                game.effect_end_time = pygame.time.get_ticks() + 5000
+                if game.active_effect == "shield": game.shield_active = True
+                game.powerup = None
+
+            game.food["timer"] -= 1
+            if game.food["timer"] <= 0: game.food = game.spawn_item("food")
+            if not game.powerup and random.random() < 0.01: game.powerup = game.spawn_item("powerup")
+            if game.powerup:
+                game.powerup["timer"] -= 1
+                if game.powerup["timer"] <= 0: game.powerup = None
+
+        game.draw_grid()
+        for s in game.snake: pygame.draw.rect(screen, settings["snake_color"], (*s, 9, 9))
+        for o in game.obstacles: pygame.draw.rect(screen, (50, 50, 50), o)
+        pygame.draw.rect(screen, game.food["color"], (*game.food["pos"], 9, 9))
+        pygame.draw.rect(screen, (100, 0, 100), (*game.poison, 9, 9)) 
+        if game.powerup: pygame.draw.ellipse(screen, (0, 255, 255), (*game.powerup["pos"], 10, 10))
+
+        status = f"Score: {game.score} | Lvl: {game.level} | Shield: {game.shield_active}"
+        screen.blit(font_small.render(status, True, (0, 0, 0)), (10, 10))
+
+        spd = 10 + game.level * 2
+        if game.active_effect == "speed" and pygame.time.get_ticks() < game.effect_end_time: spd += 10
+        if game.active_effect == "slow" and pygame.time.get_ticks() < game.effect_end_time: spd -= 5
+        clock.tick(max(spd, 5))
+
+    elif game.state == "GAMEOVER":
+        screen.blit(font_big.render("GAME OVER", True, (255, 0, 0)), (200, 150))
+        screen.blit(font_small.render(f"Score: {game.score} | R: Retry | L: Leaders", True, (0, 0, 0)), (160, 200))
+
+    pygame.display.flip()
+
+pygame.quit()
