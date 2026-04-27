@@ -1,0 +1,149 @@
+import pygame
+import math
+import datetime
+
+# Палитра
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+CYAN = (0, 255, 255)
+MAGENTA = (255, 0, 255)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+
+def flood_fill(surface, x, y, new_color):
+    """Алгоритм заливки области одним цветом."""
+    target_color = surface.get_at((x, y))
+    if target_color == new_color:
+        return
+    
+    pixels_to_fill = [(x, y)]
+    width, height = surface.get_size()
+    
+    while pixels_to_fill:
+        cx, cy = pixels_to_fill.pop()
+        if surface.get_at((cx, cy)) == target_color:
+            surface.set_at((cx, cy), new_color)
+            if cx > 0: pixels_to_fill.append((cx - 1, cy))
+            if cx < width - 1: pixels_to_fill.append((cx + 1, cy))
+            if cy > 0: pixels_to_fill.append((cx, cy - 1))
+            if cy < height - 1: pixels_to_fill.append((cx, cy + 1))
+
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((800, 600))
+    canvas = pygame.Surface((800, 600)) # Рисуем на отдельном холсте
+    canvas.fill(BLACK)
+    clock = pygame.time.Clock()
+    
+    # Состояние приложения
+    current_color = BLUE
+    thickness = 2
+    tool = 'pencil' # 'pencil', 'line', 'fill', 'text'
+    
+    start_pos = None
+    drawing = False
+    
+    # Текстовый ввод
+    font = pygame.font.SysFont("Arial", 24)
+    text_buffer = ""
+    text_pos = None
+    is_typing = False
+
+    while True:
+        mouse_pos = pygame.mouse.get_pos()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return
+
+            if event.type == pygame.KEYDOWN:
+                # 3.2 Выбор толщины
+                if event.key == pygame.K_1: thickness = 2
+                elif event.key == pygame.K_2: thickness = 5
+                elif event.key == pygame.K_3: thickness = 10
+                
+                # Выбор инструментов
+                elif event.key == pygame.K_p: tool = 'pencil'
+                elif event.key == pygame.K_l: tool = 'line'
+                elif event.key == pygame.K_f: tool = 'fill'
+                elif event.key == pygame.K_t: tool = 'text'
+                
+                # 3.4 Сохранение (Ctrl+S)
+                if event.key == pygame.K_s and (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                    now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                    filename = f"screenshot_{now}.png"
+                    pygame.image.save(canvas, filename)
+                    print(f"Saved as {filename}")
+
+                # 3.5 Логика текста
+                if is_typing:
+                    if event.key == pygame.K_RETURN:
+                        txt_surf = font.render(text_buffer, True, current_color)
+                        canvas.blit(txt_surf, text_pos)
+                        text_buffer = ""; is_typing = False
+                    elif event.key == pygame.K_ESCAPE:
+                        text_buffer = ""; is_typing = False
+                    elif event.key == pygame.K_BACKSPACE:
+                        text_buffer = text_buffer[:-1]
+                    else:
+                        text_buffer += event.unicode
+
+                # Цвета
+                if event.key == pygame.K_r: current_color = RED
+                elif event.key == pygame.K_g: current_color = GREEN
+                elif event.key == pygame.K_b: current_color = BLUE
+                elif event.key == pygame.K_c: canvas.fill(BLACK)
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if tool == 'pencil':
+                    drawing = True
+                elif tool == 'line':
+                    drawing = True
+                    start_pos = event.pos
+                elif tool == 'fill':
+                    flood_fill(canvas, event.pos[0], event.pos[1], current_color)
+                elif tool == 'text' and not is_typing:
+                    is_typing = True
+                    text_pos = event.pos
+                    text_buffer = ""
+
+            if event.type == pygame.MOUSEBUTTONUP:
+                if tool == 'line' and drawing:
+                    pygame.draw.line(canvas, current_color, start_pos, event.pos, thickness)
+                drawing = False
+
+            if event.type == pygame.MOUSEMOTION and drawing:
+                if tool == 'pencil':
+                    # 3.1 Карандаш (непрерывная линия)
+                    pygame.draw.circle(canvas, current_color, event.pos, thickness // 2)
+                    # Чтобы не было дырок при быстром движении:
+                    if start_pos:
+                        pygame.draw.line(canvas, current_color, start_pos, event.pos, thickness)
+                    start_pos = event.pos
+                
+        if not drawing: start_pos = None
+
+        # Отрисовка
+        screen.fill((50, 50, 50)) # Серый фон за холстом
+        screen.blit(canvas, (0, 0))
+
+        # Предварительный просмотр линии
+        if tool == 'line' and drawing and start_pos:
+            pygame.draw.line(screen, current_color, start_pos, mouse_pos, thickness)
+        
+        # Отображение печатаемого текста
+        if is_typing:
+            txt_preview = font.render(text_buffer + "|", True, current_color)
+            screen.blit(txt_preview, text_pos)
+
+        # Инфо-панель
+        info = f"Tool: {tool} | Thickness: {thickness} | Color: {current_color}"
+        pygame.display.set_caption(info)
+        
+        pygame.display.flip()
+        clock.tick(60)
+
+if __name__ == "__main__":
+    main()

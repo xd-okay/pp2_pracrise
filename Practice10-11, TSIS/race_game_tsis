@@ -1,0 +1,516 @@
+# import pygame, sys, random, json, os, time
+# from pygame.locals import *
+
+# # --- ВВОД ИМЕНИ ---
+# USER_NAME = input("Введите ваше имя: ") or "Player1"
+
+# # --- Инициализация ---
+# pygame.init()
+# FPS = 60
+# clock = pygame.time.Clock()
+# SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
+# DISPLAYSURF = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+# pygame.display.set_caption("Racer Pro 2026")
+
+# # Цвета и шрифты
+# WHITE, BLACK, RED, GREEN, BLUE, YELLOW = (255,255,255), (0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0)
+# FONT_S = pygame.font.SysFont("Verdana", 18)
+# FONT_M = pygame.font.SysFont("Verdana", 35)
+# FONT_L = pygame.font.SysFont("Verdana", 60)
+
+# # Глобальные данные
+# SCORE = 0
+# COINS_COLLECTED = 0
+# DISTANCE = 0
+# BASE_SPEED = 5
+# LAST_SCORE_CHECK = 0 
+
+# # --- Системные функции ---
+
+# def save_score(name, score, dist):
+#     data = []
+#     if os.path.exists("leaderboard.json"):
+#         with open("leaderboard.json", "r") as f:
+#             try: data = json.load(f)
+#             except: data = []
+#     data.append({"name": name, "score": score, "dist": int(dist)})
+#     data = sorted(data, key=lambda x: x["score"], reverse=True)[:10]
+#     with open("leaderboard.json", "w") as f: json.dump(data, f)
+
+# def draw_text(text, font, color, x, y, center=True):
+#     img = font.render(str(text), True, color)
+#     rect = img.get_rect()
+#     if center: rect.center = (x, y)
+#     else: rect.topleft = (x, y)
+#     DISPLAYSURF.blit(img, rect)
+
+# # --- Классы объектов ---
+
+# class Player(pygame.sprite.Sprite):
+#     def __init__(self):
+#         super().__init__()
+#         self.image = pygame.image.load("Player.png")
+#         self.rect = self.image.get_rect(center=(200, 520))
+#         self.has_shield = False
+#         self.shield_img = pygame.transform.scale(pygame.image.load("shield.png"), (25, 25))
+
+#     def move(self):
+#         keys = pygame.key.get_pressed()
+#         step = 7
+#         if keys[K_LEFT] and self.rect.left > 0: self.rect.move_ip(-step, 0)
+#         if keys[K_RIGHT] and self.rect.right < SCREEN_WIDTH: self.rect.move_ip(step, 0)
+
+# class Enemy(pygame.sprite.Sprite):
+#     def __init__(self):
+#         super().__init__()
+#         self.image = pygame.image.load("Enemy.png")
+#         self.rect = self.image.get_rect()
+#         self.spawn()
+
+#     def spawn(self):
+#         self.rect.center = (random.randint(40, SCREEN_WIDTH-40), random.randint(-900, -400))
+
+#     def update(self, speed):
+#         self.rect.move_ip(0, speed)
+#         if self.rect.top > SCREEN_HEIGHT:
+#             global SCORE
+#             SCORE += 1
+#             self.spawn()
+
+# class Obstacle(pygame.sprite.Sprite):
+#     def __init__(self, type):
+#         super().__init__()
+#         self.type = type
+#         img = pygame.image.load(f"{type.lower()}.png")
+#         if type == "Log": self.image = pygame.transform.scale(img, (100, 50))
+#         elif type == "Oil": self.image = pygame.transform.scale(img, (60, 30))
+#         else: self.image = pygame.transform.scale(img, (35, 35))
+#         self.rect = self.image.get_rect()
+#         self.spawn()
+
+#     def spawn(self):
+#         self.rect.center = (random.randint(60, SCREEN_WIDTH-60), random.randint(-400, -100))
+
+#     def update(self, speed):
+#         self.rect.move_ip(0, speed)
+#         if self.rect.top > SCREEN_HEIGHT: self.spawn()
+
+# class Coin(pygame.sprite.Sprite):
+#     def __init__(self, value):
+#         super().__init__()
+#         self.value = value
+#         img_f = "coin.png" if value == 1 else "coin5.png"
+#         self.image = pygame.transform.scale(pygame.image.load(img_f), (30, 30))
+#         self.rect = self.image.get_rect()
+#         # Мы вызовем spawn позже, передав группы преград
+
+#     def spawn(self, obstacles_group, enemies_group):
+#         # Логика: спавним, пока не найдем пустое место
+#         while True:
+#             self.rect.center = (random.randint(30, SCREEN_WIDTH-30), random.randint(-1000, -50))
+#             # Проверяем столкновение с преградами и врагами
+#             if not pygame.sprite.spritecollideany(self, obstacles_group) and \
+#                not pygame.sprite.spritecollideany(self, enemies_group):
+#                 break
+
+#     def update(self, speed):
+#         self.rect.move_ip(0, speed)
+#         # Если улетела за экран, она должна переспавниться (логика в игровом цикле)
+
+# # --- Экраны ---
+
+# def leaderboard_screen():
+#     while True:
+#         DISPLAYSURF.fill(WHITE)
+#         draw_text("TOP 10", FONT_M, BLACK, 200, 60)
+#         data = []
+#         if os.path.exists("leaderboard.json"):
+#             with open("leaderboard.json", "r") as f:
+#                 try: data = json.load(f)
+#                 except: pass
+#         for i, entry in enumerate(data):
+#             txt = f"{i+1}. {entry['name']} | {entry['score']} pts"
+#             draw_text(txt, FONT_S, BLACK, 200, 140 + (i*35))
+#         back_btn = pygame.draw.rect(DISPLAYSURF, BLACK, (150, 520, 100, 40))
+#         draw_text("BACK", FONT_S, WHITE, 200, 540)
+#         for event in pygame.event.get():
+#             if event.type == QUIT: pygame.quit(); sys.exit()
+#             if event.type == MOUSEBUTTONDOWN and back_btn.collidepoint(event.pos): return
+#         pygame.display.update()
+#         clock.tick(FPS)
+
+# def game_loop():
+#     global SCORE, COINS_COLLECTED, DISTANCE, BASE_SPEED, LAST_SCORE_CHECK
+#     SCORE, COINS_COLLECTED, DISTANCE, BASE_SPEED, LAST_SCORE_CHECK = 0, 0, 0, 5, 0
+    
+#     P1 = Player()
+#     enemies = pygame.sprite.Group([Enemy()])
+#     obstacles = pygame.sprite.Group([Obstacle("Log"), Obstacle("Oil"), Obstacle("Banana")])
+    
+#     # Инициализируем монеты и сразу спавним их правильно
+#     coin1 = Coin(1)
+#     coin5 = Coin(5)
+#     coin1.spawn(obstacles, enemies)
+#     coin5.spawn(obstacles, enemies)
+#     coins = pygame.sprite.Group([coin1, coin5])
+    
+#     bg = pygame.image.load("AnimatedStreet.png")
+#     bg_y = 0
+#     active_effect, effect_timer = None, 0
+
+#     while True:
+#         # 1. Увеличение скорости каждые 100 очков
+#         if SCORE - LAST_SCORE_CHECK >= 100:
+#             BASE_SPEED += 0.5
+#             LAST_SCORE_CHECK += 100
+
+#         current_speed = BASE_SPEED
+#         if effect_timer > 0:
+#             effect_timer -= 1/FPS
+#             if active_effect == "Oil": current_speed = 3
+#             if active_effect == "Banana": current_speed = BASE_SPEED + 7
+#         else:
+#             active_effect = None
+
+#         bg_y = (bg_y + current_speed) % SCREEN_HEIGHT
+#         DISPLAYSURF.blit(bg, (0, bg_y))
+#         DISPLAYSURF.blit(bg, (0, bg_y - SCREEN_HEIGHT))
+#         DISTANCE += current_speed / 60
+
+#         for event in pygame.event.get():
+#             if event.type == QUIT: pygame.quit(); sys.exit()
+
+#         P1.move()
+#         enemies.update(current_speed)
+#         coins.update(current_speed)
+#         obstacles.update(current_speed)
+
+#         # Переспавн монет, если они улетели за экран
+#         for c in coins:
+#             if c.rect.top > SCREEN_HEIGHT:
+#                 c.spawn(obstacles, enemies)
+
+#         # Коллизии монеты
+#         c_hit = pygame.sprite.spritecollideany(P1, coins)
+#         if c_hit:
+#             COINS_COLLECTED += c_hit.value
+#             SCORE += c_hit.value * 10
+#             c_hit.spawn(obstacles, enemies)
+
+#         # Коллизии объекты
+#         o_hit = pygame.sprite.spritecollideany(P1, obstacles)
+#         if o_hit:
+#             if o_hit.type == "Oil":
+#                 active_effect = "Oil"; effect_timer = 5
+#             elif o_hit.type == "Banana":
+#                 active_effect = "Banana"; effect_timer = 3
+#             if o_hit.type != "Log": o_hit.spawn()
+
+#         # Коллизии смерть
+#         hazard = pygame.sprite.spritecollideany(P1, enemies)
+#         log_hit = any(pygame.sprite.collide_rect(P1, l) for l in obstacles if l.type == "Log")
+        
+#         if hazard or log_hit:
+#             if P1.has_shield:
+#                 P1.has_shield = False
+#                 if hazard: hazard.spawn()
+#                 for l in obstacles: 
+#                     if l.type == "Log" and pygame.sprite.collide_rect(P1, l): l.spawn()
+#             else:
+#                 save_score(USER_NAME, SCORE, DISTANCE)
+#                 DISPLAYSURF.fill(RED); draw_text("GAME OVER", FONT_L, WHITE, 200, 300)
+#                 pygame.display.update(); time.sleep(2)
+#                 return "MENU"
+
+#         enemies.draw(DISPLAYSURF)
+#         coins.draw(DISPLAYSURF)
+#         obstacles.draw(DISPLAYSURF)
+#         DISPLAYSURF.blit(P1.image, P1.rect)
+#         if P1.has_shield: DISPLAYSURF.blit(P1.shield_img, (P1.rect.centerx-12, P1.rect.top-25))
+        
+#         draw_text(f"Score: {SCORE} | Speed: {BASE_SPEED} | Dist: {int(DISTANCE)}m", FONT_S, BLACK, 10, 10, False)
+#         pygame.display.update()
+#         clock.tick(FPS)
+
+# def main_menu():
+#     while True:
+#         DISPLAYSURF.fill(WHITE)
+#         draw_text("RACER ADVANCED", FONT_M, BLACK, 200, 100)
+#         btn_play = pygame.draw.rect(DISPLAYSURF, GREEN, (125, 220, 150, 50))
+#         draw_text("PLAY", FONT_S, WHITE, 200, 245)
+#         btn_lead = pygame.draw.rect(DISPLAYSURF, BLUE, (125, 300, 150, 50))
+#         draw_text("LEADERS", FONT_S, WHITE, 200, 325)
+#         btn_exit = pygame.draw.rect(DISPLAYSURF, RED, (125, 380, 150, 50))
+#         draw_text("EXIT", FONT_S, WHITE, 200, 405)
+#         for event in pygame.event.get():
+#             if event.type == QUIT: pygame.quit(); sys.exit()
+#             if event.type == MOUSEBUTTONDOWN:
+#                 if btn_play.collidepoint(event.pos): return "GAME"
+#                 if btn_lead.collidepoint(event.pos): leaderboard_screen()
+#                 if btn_exit.collidepoint(event.pos): pygame.quit(); sys.exit()
+#         pygame.display.update()
+#         clock.tick(FPS)
+
+# state = "MENU"
+# while True:
+#     if state == "MENU": state = main_menu()
+#     elif state == "GAME": state = game_loop()
+
+
+
+import pygame, sys, random, json, os, time
+from pygame.locals import *
+
+# --- ВВОД ИМЕНИ ---
+USER_NAME = input("Введите ваше имя: ") or "Player1"
+
+# --- Инициализация ---
+pygame.init()
+FPS = 60
+clock = pygame.time.Clock()
+SCREEN_WIDTH, SCREEN_HEIGHT = 400, 600
+DISPLAYSURF = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Racer Pro 2026")
+
+# Цвета и шрифты
+WHITE, BLACK, RED, GREEN, BLUE = (255,255,255), (0,0,0), (255,0,0), (0,255,0), (0,0,255)
+FONT_S = pygame.font.SysFont("Verdana", 18)
+FONT_M = pygame.font.SysFont("Verdana", 35)
+FONT_L = pygame.font.SysFont("Verdana", 60)
+
+# Глобальные данные
+SCORE = 0
+COINS_COLLECTED = 0
+DISTANCE = 0
+BASE_SPEED = 5
+LAST_SCORE_CHECK = 0 
+
+# --- Системные функции ---
+
+def save_score(name, score, dist):
+    data = []
+    if os.path.exists("leaderboard.json"):
+        with open("leaderboard.json", "r") as f:
+            try: data = json.load(f)
+            except: data = []
+    data.append({"name": name, "score": score, "dist": int(dist)})
+    data = sorted(data, key=lambda x: x["score"], reverse=True)[:10]
+    with open("leaderboard.json", "w") as f: json.dump(data, f)
+
+def draw_text(text, font, color, x, y, center=True):
+    img = font.render(str(text), True, color)
+    rect = img.get_rect()
+    if center: rect.center = (x, y)
+    else: rect.topleft = (x, y)
+    DISPLAYSURF.blit(img, rect)
+
+# --- Классы объектов ---
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.image.load("Player.png")
+        self.rect = self.image.get_rect(center=(200, 520))
+        self.has_shield = False
+        self.shield_icon = pygame.transform.scale(pygame.image.load("shield.png"), (25, 25))
+
+    def move(self):
+        keys = pygame.key.get_pressed()
+        step = 7
+        if keys[K_LEFT] and self.rect.left > 0: self.rect.move_ip(-step, 0)
+        if keys[K_RIGHT] and self.rect.right < SCREEN_WIDTH: self.rect.move_ip(step, 0)
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.image.load("Enemy.png")
+        self.rect = self.image.get_rect()
+        self.spawn()
+
+    def spawn(self):
+        self.rect.center = (random.randint(40, SCREEN_WIDTH-40), random.randint(-900, -400))
+
+    def update(self, speed):
+        self.rect.move_ip(0, speed)
+        if self.rect.top > SCREEN_HEIGHT:
+            global SCORE
+            SCORE += 1
+            self.spawn()
+
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self, type):
+        super().__init__()
+        self.type = type
+        img = pygame.image.load(f"{type.lower()}.png")
+        if type == "Log": self.image = pygame.transform.scale(img, (100, 50))
+        elif type == "Oil": self.image = pygame.transform.scale(img, (60, 30))
+        else: self.image = pygame.transform.scale(img, (35, 35))
+        self.rect = self.image.get_rect()
+        self.spawn()
+
+    def spawn(self):
+        self.rect.center = (random.randint(60, SCREEN_WIDTH-60), random.randint(-400, -100))
+
+    def update(self, speed):
+        self.rect.move_ip(0, speed)
+        if self.rect.top > SCREEN_HEIGHT: self.spawn()
+
+class Item(pygame.sprite.Sprite): # Класс для Монет и Щита
+    def __init__(self, itype, value=0):
+        super().__init__()
+        self.type = itype
+        self.value = value
+        if itype == "Coin":
+            img_f = "coin.png" if value == 1 else "coin5.png"
+            self.image = pygame.transform.scale(pygame.image.load(img_f), (30, 30))
+        elif itype == "Shield":
+            self.image = pygame.transform.scale(pygame.image.load("shield.png"), (30, 30))
+        
+        self.rect = self.image.get_rect()
+
+    def spawn(self, obstacles, enemies):
+        while True:
+            self.rect.center = (random.randint(30, SCREEN_WIDTH-30), random.randint(-1000, -50))
+            if not pygame.sprite.spritecollideany(self, obstacles) and \
+               not pygame.sprite.spritecollideany(self, enemies):
+                break
+
+    def update(self, speed):
+        self.rect.move_ip(0, speed)
+
+# --- Экраны ---
+
+def leaderboard_screen():
+    while True:
+        DISPLAYSURF.fill(WHITE)
+        draw_text("TOP 10", FONT_M, BLACK, 200, 60)
+        data = []
+        if os.path.exists("leaderboard.json"):
+            with open("leaderboard.json", "r") as f:
+                try: data = json.load(f)
+                except: pass
+        for i, entry in enumerate(data):
+            txt = f"{i+1}. {entry['name']} | {entry['score']} pts"
+            draw_text(txt, FONT_S, BLACK, 200, 140 + (i*35))
+        back_btn = pygame.draw.rect(DISPLAYSURF, BLACK, (150, 520, 100, 40))
+        draw_text("BACK", FONT_S, WHITE, 200, 540)
+        for event in pygame.event.get():
+            if event.type == QUIT: pygame.quit(); sys.exit()
+            if event.type == MOUSEBUTTONDOWN and back_btn.collidepoint(event.pos): return
+        pygame.display.update()
+        clock.tick(FPS)
+
+def game_loop():
+    global SCORE, COINS_COLLECTED, DISTANCE, BASE_SPEED, LAST_SCORE_CHECK
+    SCORE, COINS_COLLECTED, DISTANCE, BASE_SPEED, LAST_SCORE_CHECK = 0, 0, 0, 5, 0
+    
+    P1 = Player()
+    enemies = pygame.sprite.Group([Enemy()])
+    obstacles = pygame.sprite.Group([Obstacle("Log"), Obstacle("Oil"), Obstacle("Banana")])
+    
+    # Инициализация предметов
+    items = pygame.sprite.Group()
+    c1 = Item("Coin", 1); c1.spawn(obstacles, enemies); items.add(c1)
+    c5 = Item("Coin", 5); c5.spawn(obstacles, enemies); items.add(c5)
+    sh = Item("Shield"); sh.spawn(obstacles, enemies); items.add(sh)
+    
+    bg = pygame.image.load("AnimatedStreet.png")
+    bg_y = 0
+    active_effect, effect_timer = None, 0
+
+    while True:
+        if SCORE - LAST_SCORE_CHECK >= 100:
+            BASE_SPEED += 0.5
+            LAST_SCORE_CHECK += 100
+
+        current_speed = BASE_SPEED
+        if effect_timer > 0:
+            effect_timer -= 1/FPS
+            if active_effect == "Oil": current_speed = 3
+            if active_effect == "Banana": current_speed = BASE_SPEED + 7
+        else: active_effect = None
+
+        bg_y = (bg_y + current_speed) % SCREEN_HEIGHT
+        DISPLAYSURF.blit(bg, (0, bg_y))
+        DISPLAYSURF.blit(bg, (0, bg_y - SCREEN_HEIGHT))
+        DISTANCE += current_speed / 60
+
+        for event in pygame.event.get():
+            if event.type == QUIT: pygame.quit(); sys.exit()
+
+        P1.move()
+        enemies.update(current_speed)
+        items.update(current_speed)
+        obstacles.update(current_speed)
+
+        # Переспавн улетевших предметов
+        for it in items:
+            if it.rect.top > SCREEN_HEIGHT:
+                it.spawn(obstacles, enemies)
+
+        # Коллизии с предметами (Монеты и Щит)
+        hit = pygame.sprite.spritecollideany(P1, items)
+        if hit:
+            if hit.type == "Coin":
+                COINS_COLLECTED += hit.value
+                SCORE += hit.value * 10
+            elif hit.type == "Shield":
+                P1.has_shield = True
+            hit.spawn(obstacles, enemies)
+
+        # Коллизии с препятствиями (Масло, Банан)
+        o_hit = pygame.sprite.spritecollideany(P1, obstacles)
+        if o_hit:
+            if o_hit.type == "Oil": active_effect = "Oil"; effect_timer = 5
+            elif o_hit.type == "Banana": active_effect = "Banana"; effect_timer = 3
+            if o_hit.type != "Log": o_hit.spawn()
+
+        # Коллизии Смерть
+        hazard = pygame.sprite.spritecollideany(P1, enemies)
+        log_hit = any(pygame.sprite.collide_rect(P1, l) for l in obstacles if l.type == "Log")
+        
+        if hazard or log_hit:
+            if P1.has_shield:
+                P1.has_shield = False
+                if hazard: hazard.spawn()
+                for l in obstacles: 
+                    if l.type == "Log" and pygame.sprite.collide_rect(P1, l): l.spawn()
+            else:
+                save_score(USER_NAME, SCORE, DISTANCE)
+                DISPLAYSURF.fill(RED); draw_text("GAME OVER", FONT_L, WHITE, 200, 300)
+                pygame.display.update(); time.sleep(2)
+                return "MENU"
+
+        enemies.draw(DISPLAYSURF)
+        items.draw(DISPLAYSURF)
+        obstacles.draw(DISPLAYSURF)
+        DISPLAYSURF.blit(P1.image, P1.rect)
+        if P1.has_shield: DISPLAYSURF.blit(P1.shield_icon, (P1.rect.centerx-12, P1.rect.top-30))
+        
+        draw_text(f"Score: {SCORE} | Speed: {BASE_SPEED} | Dist: {int(DISTANCE)}m", FONT_S, BLACK, 10, 10, False)
+        pygame.display.update()
+        clock.tick(FPS)
+
+def main_menu():
+    while True:
+        DISPLAYSURF.fill(WHITE)
+        draw_text("RACER ADVANCED", FONT_M, BLACK, 200, 100)
+        btn_play = pygame.draw.rect(DISPLAYSURF, GREEN, (125, 220, 150, 50))
+        draw_text("PLAY", FONT_S, WHITE, 200, 245)
+        btn_lead = pygame.draw.rect(DISPLAYSURF, BLUE, (125, 300, 150, 50))
+        draw_text("LEADERS", FONT_S, WHITE, 200, 325)
+        btn_exit = pygame.draw.rect(DISPLAYSURF, RED, (125, 380, 150, 50))
+        draw_text("EXIT", FONT_S, WHITE, 200, 405)
+        for event in pygame.event.get():
+            if event.type == QUIT: pygame.quit(); sys.exit()
+            if event.type == MOUSEBUTTONDOWN:
+                if btn_play.collidepoint(event.pos): return "GAME"
+                if btn_lead.collidepoint(event.pos): leaderboard_screen()
+                if btn_exit.collidepoint(event.pos): pygame.quit(); sys.exit()
+        pygame.display.update()
+        clock.tick(FPS)
+
+state = "MENU"
+while True:
+    if state == "MENU": state = main_menu()
+    elif state == "GAME": state = game_loop()
